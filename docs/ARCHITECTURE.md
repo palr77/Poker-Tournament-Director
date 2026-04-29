@@ -1,19 +1,32 @@
-# Architecture Standards
+# Architecture & Tech Stack Standards
 
-**Layered Clean Architecture**
+## Project Structure (Multi-module recommended later)
+/app
+├── data/               # Room, DAOs, Repositories
+├── domain/             # Models, UseCases, Business rules
+├── presentation/       # Compose UI, ViewModels, Navigation
+├── di/                 # Hilt modules
+├── feature/            # Feature modules (clock, night, stats, etc.)
+├── core/               # utils, theme, navigation, premium checks
+└── docs/
 
-- **presentation**: Compose screens, ViewModels (MVI), UI state
-- **domain**: UseCases, Entities, Repositories interfaces, Business rules
-- **data**: Room DAOs, Mappers, Local DataSource, BillingRepository, AdsRepository
+## Tech Stack (2026 Android best practices)
+- **Language**: Kotlin 2.0+
+- **UI**: Jetpack Compose + Material3 + Adaptive
+- **Architecture**: MVVM + Clean Architecture + UseCases
+- **Database**: Room (offline-first, single source of truth)
+- **State**: Kotlin Flows + StateFlow + Compose State
+- **DI**: Hilt
+- **Navigation**: Jetpack Navigation Compose + Type-safe
+- **Premium / IAP**: Google Play Billing Library v7 (subscriptions)
+- **Live Sharing (Premium)**: Android Nearby Connections API (Wi-Fi Direct / same network)
+- **Exports**: Kotlinx Serialization + CSV writer
+- **Testing**: JUnit5 + Turbine + MockK + Compose UI tests
+- **Build**: Gradle Kotlin DSL + Version Catalogs
 
-**Offline-First Strategy**
-- All reads/writes go through Room first.
-- ExportSnapshot entity stores night results for CSV/WhatsApp.
-- No network required except Billing & Ads.
-
-**State Management**
-- MVI with Orbit-MVI or simple StateFlow + SharedFlow.
-- Single source of truth = Room DB.
-
-**Feature Modules**
-- feature-season, feature-night, feature-clock, feature-stats, feature-paywall, feature-tv
+## Coding Standards
+- Package-by-feature.
+- All business rules in domain layer (testable).
+- No logic in Composables.
+- Use sealed classes/interfaces for events/actions.
+- Premium feature gating via `PremiumManager` + `isPremium()` flow.

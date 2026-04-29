@@ -3,9 +3,12 @@ package com.poker.tournamentdirector.core.di
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.poker.tournamentdirector.core.database.TournamentDirectorDatabase
+import com.poker.tournamentdirector.core.database.dao.BountyDao
+import com.poker.tournamentdirector.core.database.dao.ExportDao
 import com.poker.tournamentdirector.core.database.dao.NightDao
 import com.poker.tournamentdirector.core.database.dao.PlayerDao
 import com.poker.tournamentdirector.core.database.dao.SeasonDao
@@ -15,7 +18,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -41,6 +43,12 @@ object DatabaseModule {
 
     @Provides
     fun provideNightDao(database: TournamentDirectorDatabase): NightDao = database.nightDao()
+
+    @Provides
+    fun provideBountyDao(database: TournamentDirectorDatabase): BountyDao = database.bountyDao()
+
+    @Provides
+    fun provideExportDao(database: TournamentDirectorDatabase): ExportDao = database.exportDao()
 
     @Provides
     @Singleton

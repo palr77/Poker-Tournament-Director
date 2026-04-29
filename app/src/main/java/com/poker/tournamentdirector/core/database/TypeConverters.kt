@@ -1,19 +1,17 @@
 package com.poker.tournamentdirector.core.database
 
 import androidx.room.TypeConverter
-import com.poker.tournamentdirector.core.database.model.ActionType
-import com.poker.tournamentdirector.core.database.model.ClockStatus
-import com.poker.tournamentdirector.core.database.model.EliminationReason
-import com.poker.tournamentdirector.core.database.model.ExportType
-import com.poker.tournamentdirector.core.database.model.NightPlayerStatus
-import com.poker.tournamentdirector.core.database.model.NightStatus
-import com.poker.tournamentdirector.core.database.model.PlayerKind
-import java.math.BigDecimal
-import java.math.RoundingMode
+import com.poker.tournamentdirector.domain.model.ActionType
+import com.poker.tournamentdirector.domain.model.ClockStatus
+import com.poker.tournamentdirector.domain.model.EliminationReason
+import com.poker.tournamentdirector.domain.model.ExportType
+import com.poker.tournamentdirector.domain.model.NightPlayerStatus
+import com.poker.tournamentdirector.domain.model.NightStatus
+import com.poker.tournamentdirector.domain.model.PlayerKind
 import java.time.Instant
 import java.time.LocalDate
 
-class Converters {
+class TournamentTypeConverters {
     @TypeConverter
     fun instantToEpochMillis(value: Instant?): Long? = value?.toEpochMilli()
 
@@ -25,14 +23,6 @@ class Converters {
 
     @TypeConverter
     fun isoToLocalDate(value: String?): LocalDate? = value?.let(LocalDate::parse)
-
-    @TypeConverter
-    fun bigDecimalToCents(value: BigDecimal?): Long? =
-        value?.movePointRight(2)?.setScale(0, RoundingMode.HALF_UP)?.longValueExact()
-
-    @TypeConverter
-    fun centsToBigDecimal(value: Long?): BigDecimal? =
-        value?.let { BigDecimal.valueOf(it, 2) }
 
     @TypeConverter
     fun nightStatusToString(value: NightStatus?): String? = value?.name

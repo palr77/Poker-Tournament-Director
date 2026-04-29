@@ -5,13 +5,14 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.poker.tournamentdirector.core.database.model.ActionType
-import com.poker.tournamentdirector.core.database.model.ClockStatus
-import com.poker.tournamentdirector.core.database.model.EliminationReason
-import com.poker.tournamentdirector.core.database.model.ExportType
-import com.poker.tournamentdirector.core.database.model.NightPlayerStatus
-import com.poker.tournamentdirector.core.database.model.NightStatus
-import com.poker.tournamentdirector.core.database.model.PlayerKind
+import com.poker.tournamentdirector.domain.model.ActionType
+import com.poker.tournamentdirector.domain.model.ClockStatus
+import com.poker.tournamentdirector.domain.model.EliminationReason
+import com.poker.tournamentdirector.domain.model.ExportType
+import com.poker.tournamentdirector.domain.model.NightPlayerStatus
+import com.poker.tournamentdirector.domain.model.NightStatus
+import com.poker.tournamentdirector.domain.model.PlayerKind
+import com.poker.tournamentdirector.domain.rules.TournamentBusinessRules
 import java.time.Instant
 import java.time.LocalDate
 
@@ -20,12 +21,20 @@ data class SeasonEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     @ColumnInfo(name = "start_date") val startDate: LocalDate? = null,
-    @ColumnInfo(name = "buy_in_cents") val buyInCents: Long = 0,
-    @ColumnInfo(name = "rebuy_cents") val rebuyCents: Long = 0,
-    @ColumnInfo(name = "add_on_cents") val addOnCents: Long = 0,
+    @ColumnInfo(name = "inscription_fee_cents") val inscriptionFeeCents: Long =
+        TournamentBusinessRules.DEFAULT_INSCRIPTION_FEE_CENTS,
+    @ColumnInfo(name = "buy_in_cents") val buyInCents: Long =
+        TournamentBusinessRules.DEFAULT_BUY_IN_CENTS,
+    @ColumnInfo(name = "rebuy_cents") val rebuyCents: Long =
+        TournamentBusinessRules.DEFAULT_REBUY_CENTS,
+    @ColumnInfo(name = "add_on_cents") val addOnCents: Long =
+        TournamentBusinessRules.DEFAULT_ADD_ON_CENTS,
     @ColumnInfo(name = "bounty_cents") val bountyCents: Long = 0,
+    @ColumnInfo(name = "scheduled_date_count") val scheduledDateCount: Int =
+        TournamentBusinessRules.DEFAULT_SEASON_DATES,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
     @ColumnInfo(name = "created_at") val createdAt: Instant = Instant.now(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant = createdAt,
 )
 
 @Entity(
@@ -37,14 +46,26 @@ data class SeasonEntity(
             childColumns = ["season_id"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = PlayerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["host_player_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
-    indices = [Index("season_id"), Index(value = ["season_id", "date"], unique = true)],
+    indices = [
+        Index("season_id"),
+        Index("host_player_id"),
+        Index(value = ["season_id", "date"], unique = true),
+        Index(value = ["season_id", "display_order"], unique = true),
+    ],
 )
 data class SeasonDateEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "season_id") val seasonId: Long,
     val date: LocalDate,
     @ColumnInfo(name = "display_order") val displayOrder: Int,
+    @ColumnInfo(name = "host_player_id") val hostPlayerId: Long? = null,
 )
 
 @Entity(
@@ -79,12 +100,16 @@ data class PlayerEntity(
         Index("season_id"),
         Index("player_id"),
         Index(value = ["season_id", "player_id"], unique = true),
+        Index(value = ["season_id", "registration_number"], unique = true),
     ],
 )
 data class SeasonPlayerRegistrationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "season_id") val seasonId: Long,
     @ColumnInfo(name = "player_id") val playerId: Long,
+    @ColumnInfo(name = "registration_number") val registrationNumber: Int = 0,
+    @ColumnInfo(name = "inscription_paid_cents") val inscriptionPaidCents: Long = 0,
+    @ColumnInfo(name = "is_payout_eligible") val isPayoutEligible: Boolean = true,
     @ColumnInfo(name = "joined_at") val joinedAt: Instant = Instant.now(),
 )
 
@@ -104,14 +129,19 @@ data class SeasonPlayerRegistrationEntity(
             onDelete = ForeignKey.SET_NULL,
         ),
     ],
-    indices = [Index("season_id"), Index("season_date_id")],
+    indices = [
+        Index("season_id"),
+        Index("season_date_id"),
+        Index(value = ["season_id", "night_number"], unique = true),
+    ],
 )
 data class NightEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "season_id") val seasonId: Long,
     @ColumnInfo(name = "season_date_id") val seasonDateId: Long? = null,
-    val status: NightStatus = NightStatus.Scheduled,
     @ColumnInfo(name = "night_number") val nightNumber: Int,
+    @ColumnInfo(name = "scheduled_date") val scheduledDate: LocalDate? = null,
+    val status: NightStatus = NightStatus.Scheduled,
     @ColumnInfo(name = "started_at") val startedAt: Instant? = null,
     @ColumnInfo(name = "closed_at") val closedAt: Instant? = null,
 )
@@ -131,11 +161,20 @@ data class NightEntity(
             childColumns = ["player_id"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = PlayerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["eliminated_by_player_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index("night_id"),
         Index("player_id"),
+        Index("eliminated_by_player_id"),
+        Index("seat_number"),
         Index(value = ["night_id", "player_id"], unique = true),
+        Index(value = ["night_id", "seat_number"], unique = true),
     ],
 )
 data class NightPlayerStateEntity(
@@ -144,10 +183,15 @@ data class NightPlayerStateEntity(
     @ColumnInfo(name = "player_id") val playerId: Long,
     val status: NightPlayerStatus = NightPlayerStatus.Registered,
     @ColumnInfo(name = "seat_number") val seatNumber: Int? = null,
+    @ColumnInfo(name = "is_bounty_player") val isBountyPlayer: Boolean = false,
+    @ColumnInfo(name = "buy_in_count") val buyInCount: Int = 0,
     @ColumnInfo(name = "rebuy_count") val rebuyCount: Int = 0,
     @ColumnInfo(name = "has_add_on") val hasAddOn: Boolean = false,
+    @ColumnInfo(name = "is_guest") val isGuest: Boolean = false,
+    @ColumnInfo(name = "is_payout_eligible") val isPayoutEligible: Boolean = true,
     @ColumnInfo(name = "eliminated_by_player_id") val eliminatedByPlayerId: Long? = null,
     @ColumnInfo(name = "eliminated_at") val eliminatedAt: Instant? = null,
+    @ColumnInfo(name = "final_place") val finalPlace: Int? = null,
 )
 
 @Entity(
@@ -172,7 +216,13 @@ data class NightPlayerStateEntity(
             onDelete = ForeignKey.SET_NULL,
         ),
     ],
-    indices = [Index("night_id"), Index("player_id"), Index("target_player_id")],
+    indices = [
+        Index("night_id"),
+        Index("player_id"),
+        Index("target_player_id"),
+        Index("action"),
+        Index("is_bounty_segment"),
+    ],
 )
 data class NightActionEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -181,6 +231,7 @@ data class NightActionEventEntity(
     @ColumnInfo(name = "target_player_id") val targetPlayerId: Long? = null,
     val action: ActionType,
     @ColumnInfo(name = "amount_cents") val amountCents: Long = 0,
+    @ColumnInfo(name = "is_bounty_segment") val isBountySegment: Boolean = false,
     @ColumnInfo(name = "elimination_reason") val eliminationReason: EliminationReason? = null,
     @ColumnInfo(name = "metadata_json") val metadataJson: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Instant = Instant.now(),
@@ -251,6 +302,7 @@ data class ClockStateEntity(
         Index("night_id"),
         Index("player_id"),
         Index(value = ["night_id", "player_id"], unique = true),
+        Index(value = ["night_id", "place"], unique = true),
     ],
 )
 data class NightResultEntity(
@@ -261,6 +313,8 @@ data class NightResultEntity(
     val points: Int = 0,
     @ColumnInfo(name = "payout_cents") val payoutCents: Long = 0,
     @ColumnInfo(name = "bounty_payout_cents") val bountyPayoutCents: Long = 0,
+    @ColumnInfo(name = "player_kind") val playerKind: PlayerKind = PlayerKind.League,
+    @ColumnInfo(name = "is_payout_eligible") val isPayoutEligible: Boolean = true,
 )
 
 @Entity(
@@ -282,6 +336,7 @@ data class NightResultEntity(
     indices = [
         Index("season_id"),
         Index("player_id"),
+        Index("season_rank"),
         Index(value = ["season_id", "player_id"], unique = true),
     ],
 )
@@ -291,8 +346,16 @@ data class SeasonStandingEntity(
     @ColumnInfo(name = "player_id") val playerId: Long,
     val points: Int = 0,
     @ColumnInfo(name = "nights_played") val nightsPlayed: Int = 0,
+    val wins: Int = 0,
+    @ColumnInfo(name = "top_four_finishes") val topFourFinishes: Int = 0,
+    @ColumnInfo(name = "knockouts_for") val knockoutsFor: Int = 0,
+    @ColumnInfo(name = "knockouts_against") val knockoutsAgainst: Int = 0,
+    val rebuys: Int = 0,
+    @ColumnInfo(name = "add_ons") val addOns: Int = 0,
     @ColumnInfo(name = "season_rank") val seasonRank: Int = 0,
     @ColumnInfo(name = "season_payout_cents") val seasonPayoutCents: Long = 0,
+    @ColumnInfo(name = "player_kind") val playerKind: PlayerKind = PlayerKind.League,
+    @ColumnInfo(name = "is_payout_eligible") val isPayoutEligible: Boolean = true,
 )
 
 @Entity(
@@ -307,23 +370,28 @@ data class SeasonStandingEntity(
         ForeignKey(
             entity = PlayerEntity::class,
             parentColumns = ["id"],
-            childColumns = ["player_id"],
+            childColumns = ["bounty_player_id"],
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = PlayerEntity::class,
             parentColumns = ["id"],
             childColumns = ["collected_by_player_id"],
-            onDelete = ForeignKey.SET_NULL,
+            onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("night_id"), Index("player_id"), Index("collected_by_player_id")],
+    indices = [
+        Index("night_id"),
+        Index("bounty_player_id"),
+        Index("collected_by_player_id"),
+        Index(value = ["night_id", "bounty_player_id"], unique = true),
+    ],
 )
 data class BountyEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "night_id") val nightId: Long,
-    @ColumnInfo(name = "player_id") val playerId: Long,
-    @ColumnInfo(name = "collected_by_player_id") val collectedByPlayerId: Long? = null,
+    @ColumnInfo(name = "bounty_player_id") val bountyPlayerId: Long,
+    @ColumnInfo(name = "collected_by_player_id") val collectedByPlayerId: Long,
     @ColumnInfo(name = "amount_cents") val amountCents: Long = 0,
     @ColumnInfo(name = "created_at") val createdAt: Instant = Instant.now(),
 )
@@ -344,14 +412,20 @@ data class BountyEventEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("season_id"), Index("player_id")],
+    indices = [
+        Index("season_id"),
+        Index("player_id"),
+        Index(value = ["season_id", "player_id"], unique = true),
+    ],
 )
 data class BountyLedgerEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "season_id") val seasonId: Long,
     @ColumnInfo(name = "player_id") val playerId: Long,
     @ColumnInfo(name = "bounties_won") val bountiesWon: Int = 0,
-    @ColumnInfo(name = "amount_cents") val amountCents: Long = 0,
+    @ColumnInfo(name = "bounties_lost") val bountiesLost: Int = 0,
+    @ColumnInfo(name = "amount_won_cents") val amountWonCents: Long = 0,
+    @ColumnInfo(name = "amount_lost_cents") val amountLostCents: Long = 0,
 )
 
 @Entity(
@@ -366,28 +440,45 @@ data class BountyLedgerEntity(
         ForeignKey(
             entity = PlayerEntity::class,
             parentColumns = ["id"],
-            childColumns = ["player_id"],
+            childColumns = ["guest_player_id"],
             onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = PlayerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["replacing_player_id"],
+            onDelete = ForeignKey.SET_NULL,
         ),
     ],
     indices = [
         Index("night_id"),
-        Index("player_id"),
-        Index(value = ["night_id", "player_id"], unique = true),
+        Index("guest_player_id"),
+        Index("replacing_player_id"),
+        Index(value = ["night_id", "guest_player_id"], unique = true),
     ],
 )
 data class GuestParticipationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "night_id") val nightId: Long,
-    @ColumnInfo(name = "player_id") val playerId: Long,
+    @ColumnInfo(name = "guest_player_id") val guestPlayerId: Long,
+    @ColumnInfo(name = "replacing_player_id") val replacingPlayerId: Long? = null,
     @ColumnInfo(name = "buy_in_cents") val buyInCents: Long = 0,
     @ColumnInfo(name = "rebuys_cents") val rebuysCents: Long = 0,
     @ColumnInfo(name = "add_on_cents") val addOnCents: Long = 0,
+    @ColumnInfo(name = "points_earned") val pointsEarned: Int = 0,
+    val place: Int? = null,
+    @ColumnInfo(name = "created_at") val createdAt: Instant = Instant.now(),
 )
 
 @Entity(
     tableName = "export_snapshots",
     foreignKeys = [
+        ForeignKey(
+            entity = SeasonEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["season_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
         ForeignKey(
             entity = NightEntity::class,
             parentColumns = ["id"],
@@ -395,11 +486,16 @@ data class GuestParticipationEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("night_id"), Index("export_type")],
+    indices = [
+        Index("season_id"),
+        Index("night_id"),
+        Index("export_type"),
+    ],
 )
 data class ExportSnapshotEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    @ColumnInfo(name = "night_id") val nightId: Long,
+    @ColumnInfo(name = "season_id") val seasonId: Long,
+    @ColumnInfo(name = "night_id") val nightId: Long? = null,
     @ColumnInfo(name = "export_type") val exportType: ExportType,
     val payload: String,
     @ColumnInfo(name = "created_at") val createdAt: Instant = Instant.now(),

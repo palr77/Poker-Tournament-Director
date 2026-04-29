@@ -3,6 +3,8 @@ package com.poker.tournamentdirector.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.poker.tournamentdirector.core.database.dao.BountyDao
+import com.poker.tournamentdirector.core.database.dao.ExportDao
 import com.poker.tournamentdirector.core.database.dao.NightDao
 import com.poker.tournamentdirector.core.database.dao.PlayerDao
 import com.poker.tournamentdirector.core.database.dao.SeasonDao
@@ -43,11 +45,13 @@ import com.poker.tournamentdirector.core.database.entity.SeasonStandingEntity
     version = 1,
     exportSchema = true,
 )
-@TypeConverters(Converters::class)
+@TypeConverters(TournamentTypeConverters::class)
 abstract class TournamentDirectorDatabase : RoomDatabase() {
     abstract fun seasonDao(): SeasonDao
     abstract fun playerDao(): PlayerDao
     abstract fun nightDao(): NightDao
+    abstract fun bountyDao(): BountyDao
+    abstract fun exportDao(): ExportDao
 
     companion object {
         const val DATABASE_NAME = "poker_tournament_director.db"
